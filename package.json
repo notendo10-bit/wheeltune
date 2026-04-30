@@ -1,0 +1,15 @@
+{
+  "name": "wheeltune",
+  "version": "1.0.0",
+  "description": "WheelTune - Local Music Player",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-packager . WheelTune --platform=win32 --arch=x64 --out=dist --overwrite"
+  },
+  "devDependencies": {
+    "electron": "^41.3.0",
+    "electron-packager": "^17.0.0"
+  }
+}

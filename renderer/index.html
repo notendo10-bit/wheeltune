@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>WheelTune</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a1a1a; display: flex; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+
+.player-wrap { display: flex; flex-direction: column; align-items: center; padding: 2rem 0 2rem; gap: 20px; }
+
+.lcd { background: #c8d4a0; border-radius: 6px; border: 2px solid #8a9a60; padding: 10px 16px; width: 260px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.18); font-family: 'Courier New', monospace; }
+.lcd-track { font-size: 13px; color: #2a3a10; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcd-artist { font-size: 11px; color: #4a5e28; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcd-bar-wrap { margin-top: 5px; background: #a8b880; border-radius: 2px; height: 4px; width: 100%; }
+.lcd-bar { background: #2a3a10; height: 4px; border-radius: 2px; transition: width 0.4s; }
+.lcd-time { font-size: 11px; color: #3a4e20; margin-top: 4px; display: flex; justify-content: space-between; }
+
+.wheel-area { position: relative; width: 240px; height: 240px; }
+.wheel-outer { width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #f8f6f4 0%, #ece8e4 45%, #d0ccc8 100%); border: 2.5px solid #c0bcb8; position: absolute; top: 0; left: 0; cursor: grab; user-select: none; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 12px rgba(0,0,0,0.15), inset 0 2px 4px rgba(255,255,255,0.8), inset 0 -1px 3px rgba(0,0,0,0.08); }
+.wheel-outer:active { cursor: grabbing; }
+.wheel-center { width: 82px; height: 82px; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #f4f2f0 0%, #e4e0dc 60%, #d0ccc8 100%); border: 1.5px solid #c0bcb8; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; position: relative; flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.12), inset 0 1px 3px rgba(255,255,255,0.7); }
+.wheel-center:active { background: radial-gradient(circle at 50% 50%, #e8e4e0 0%, #d8d4d0 60%, #c4c0bc 100%); }
+.play-icon { width:0; height:0; border-left:18px solid #666; border-top:11px solid transparent; border-bottom:11px solid transparent; margin-left:4px; }
+.pause-icon { display:flex; gap:5px; }
+.pause-bar { width:5px; height:20px; background:#666; border-radius:1px; }
+
+.eq-btn { position: absolute; bottom: 2px; right: 2px; width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid rgba(180,120,120,0.45); background: rgba(30,20,20,0.14); color: rgba(180,140,140,0.8); font-size: 9px; font-weight: 600; letter-spacing: 0.04em; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: background 0.2s, border-color 0.2s, box-shadow 0.2s; z-index: 10; }
+.eq-btn.eq-on { background: rgba(200,50,50,0.16); border-color: rgba(220,80,80,0.7); color: rgba(255,140,140,0.95); box-shadow: 0 0 10px rgba(220,60,60,0.32), inset 0 0 8px rgba(220,60,60,0.12); }
+
+.load-btn { width: 260px; padding: 7px 12px; font-size: 12px; border-radius: 6px; border: 0.5px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.6); cursor: pointer; text-align: left; }
+.load-btn:hover { background: rgba(255,255,255,0.11); }
+
+.hint { font-size: 12px; color: rgba(255,255,255,0.3); }
+
+.tracks-mini { display: flex; flex-direction: column; gap: 4px; width: 260px; max-height: 180px; overflow-y: auto; }
+.track-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 0.5px solid transparent; transition: background 0.1s; }
+.track-item:hover { background: rgba(255,255,255,0.07); }
+.track-item.active { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); }
+.track-num { font-size:10px; color:rgba(255,255,255,0.3); width:16px; text-align:right; flex-shrink:0; }
+.track-name { color:rgba(255,255,255,0.75); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.eq-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; align-items: flex-end; justify-content: center; padding-bottom: 2rem; }
+.eq-overlay.open { display: flex; }
+.eq-panel { background: rgba(24,18,18,0.95); border: 0.5px solid rgba(180,100,100,0.3); border-radius: 16px; padding: 16px 20px 18px; width: 340px; }
+.eq-panel-title { font-size:11px; font-weight:500; color:rgba(220,160,160,0.65); text-align:center; margin-bottom:14px; letter-spacing:0.08em; }
+.eq-bands { display:flex; gap:4px; align-items:flex-end; justify-content:center; height:200px; }
+.eq-band-col { display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; }
+.eq-fader-wrap { position:relative; width:24px; height:160px; display:flex; align-items:center; justify-content:center; touch-action:none; }
+.eq-fader-track { position:absolute; top:0; bottom:0; left:50%; transform:translateX(-50%); width:3px; background:rgba(120,80,80,0.35); border-radius:2px; }
+.eq-fader-fill { position:absolute; left:50%; transform:translateX(-50%); width:3px; background:rgba(220,80,80,0.55); border-radius:2px; }
+.eq-knob { position:absolute; width:22px; height:12px; background: linear-gradient(180deg,#d0c8c4 0%,#b8b0ac 100%); border-radius:4px; border:1px solid #9a9290; cursor:ns-resize; z-index:2; transform:translateY(-50%); box-shadow:0 1px 3px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.3); }
+.eq-knob::after { content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:10px; height:1.5px; background:#7a6a62; border-radius:1px; }
+.eq-freq-label { font-size:8px; color:rgba(180,140,140,0.55); font-family:'Courier New',monospace; text-align:center; white-space:nowrap; }
+.eq-db-label { font-size:8px; color:rgba(220,160,160,0.7); font-family:'Courier New',monospace; text-align:center; min-height:12px; }
+
+.eq-footer { display:flex; gap:8px; margin-top:14px; }
+.eq-reset { flex:1; padding:8px; border-radius:8px; border:0.5px solid rgba(180,100,100,0.2); background:rgba(40,20,20,0.5); color:rgba(200,140,140,0.7); font-size:11px; cursor:pointer; text-align:center; }
+.eq-reset:hover { background:rgba(60,30,30,0.6); }
+.eq-close { flex:2; padding:8px; border-radius:8px; border:0.5px solid rgba(180,100,100,0.3); background:rgba(60,30,30,0.5); color:rgba(220,160,160,0.8); font-size:11px; cursor:pointer; text-align:center; }
+.eq-close:hover { background:rgba(80,40,40,0.65); }
+</style>
+</head>
+<body>
+
+<div class="player-wrap">
+  <div class="lcd">
+    <div class="lcd-track" id="lcdTitle">WheelTune</div>
+    <div class="lcd-artist" id="lcdArtist">フォルダを開いてください</div>
+    <div class="lcd-bar-wrap"><div class="lcd-bar" id="lcdBar" style="width:0%"></div></div>
+    <div class="lcd-time"><span id="lcdCur">0:00</span><span id="lcdDur">0:00</span></div>
+  </div>
+
+  <div class="wheel-area">
+    <div class="wheel-outer" id="wheelOuter">
+      <div class="wheel-center" id="centerBtn">
+        <div id="playPauseIcon"><div class="play-icon"></div></div>
+      </div>
+    </div>
+    <div class="eq-btn" id="eqBtn">EQ</div>
+  </div>
+
+  <div class="hint" id="hintText">ホイールを回してトラックを選択</div>
+  <button class="load-btn" id="loadBtn">📁 フォルダを開く</button>
+  <div class="tracks-mini" id="trackList"></div>
+</div>
+
+<div class="eq-overlay" id="eqOverlay">
+  <div class="eq-panel">
+    <div class="eq-panel-title">EQ — 10 band</div>
+    <div class="eq-bands" id="eqBands"></div>
+    <div class="eq-footer">
+      <div class="eq-reset" id="eqReset">Reset</div>
+      <div class="eq-close" id="eqClose">Close</div>
+    </div>
+  </div>
+</div>
+
+<audio id="audioPlayer"></audio>
+
+<script>
+let tracks = [], currentIdx = 0, isPlaying = false;
+let eqOn = false, pressTimer = null;
+const audio = document.getElementById('audioPlayer');
+
+// ── Web Audio EQ ──
+const eqCtx = new (window.AudioContext || window.webkitAudioContext)();
+const mediaSource = eqCtx.createMediaElementSource(audio);
+const freqList = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+const filters = freqList.map((freq, i) => {
+  const f = eqCtx.createBiquadFilter();
+  f.type = i === 0 ? 'lowshelf' : i === 9 ? 'highshelf' : 'peaking';
+  f.frequency.value = freq;
+  f.gain.value = 0;
+  return f;
+});
+mediaSource.connect(filters[0]);
+for (let i = 0; i < filters.length - 1; i++) filters[i].connect(filters[i + 1]);
+filters[filters.length - 1].connect(eqCtx.destination);
+const bandData = freqList.map((_, i) => ({ val: 0, filter: filters[i] }));
+
+function applyEQ() {
+  bandData.forEach(b => { b.filter.gain.value = eqOn ? b.val : 0; });
+}
+
+// ── クリック音 ──
+let clickCtx = null;
+function playKoko() {
+  try {
+    if (!clickCtx) clickCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = clickCtx, dur = 0.018;
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) {
+      const t = i / ctx.sampleRate;
+      d[i] = (Math.sin(2 * Math.PI * 2200 * t) * 0.3 + Math.sin(2 * Math.PI * 3400 * t) * 0.15) * Math.exp(-t * 320) * 0.5;
+    }
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const g = ctx.createGain(); g.gain.value = 0.6;
+    src.connect(g); g.connect(ctx.destination); src.start();
+  } catch(e) {}
+}
+
+// ── LCD ──
+function secToMMSS(s) {
+  if (!s || isNaN(s)) return '0:00';
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+}
+function updateLCD() {
+  if (!tracks.length) return;
+  document.getElementById('lcdTitle').textContent = tracks[currentIdx].title;
+  document.getElementById('lcdArtist').textContent = '—';
+  const dur = audio.duration || 0, cur = audio.currentTime || 0;
+  document.getElementById('lcdBar').style.width = (dur ? Math.round(cur / dur * 100) : 0) + '%';
+  document.getElementById('lcdCur').textContent = secToMMSS(cur);
+  document.getElementById('lcdDur').textContent = secToMMSS(dur);
+}
+
+// ── トラック操作 ──
+function loadTrack(idx) {
+  if (!tracks.length) return;
+  currentIdx = idx;
+  audio.src = 'file:///' + tracks[idx].path.replace(/\\/g, '/');
+  audio.load();
+  renderTrackList();
+  updateLCD();
+}
+function renderTrackList() {
+  const el = document.getElementById('trackList'); el.innerHTML = '';
+  tracks.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'track-item' + (i === currentIdx ? ' active' : '');
+    row.innerHTML = `<span class="track-num">${i + 1}</span><span class="track-name">${t.title}</span>`;
+    row.addEventListener('click', () => {
+      playKoko(); loadTrack(i); setPlaying(true);
+      document.getElementById('hintText').textContent = `「${t.title}」を再生中`;
+    });
+    el.appendChild(row);
+  });
+}
+function setPlaying(v) {
+  isPlaying = v;
+  const icon = document.getElementById('playPauseIcon');
+  if (isPlaying) {
+    icon.innerHTML = '<div class="pause-icon"><div class="pause-bar"></div><div class="pause-bar"></div></div>';
+    eqCtx.resume(); audio.play();
+  } else {
+    icon.innerHTML = '<div class="play-icon"></div>';
+    audio.pause();
+  }
+}
+
+function loadFiles(result) {
+  if (!result || !result.files.length) return;
+  tracks = result.files.map(f => ({ title: f.name.replace(/\.(mp3|flac|m4a|wav)$/i, ''), path: f.path }));
+  currentIdx = 0;
+  loadTrack(0);
+  document.getElementById('hintText').textContent = 'ホイールを回してトラックを選択';
+}
+
+audio.addEventListener('timeupdate', updateLCD);
+audio.addEventListener('ended', () => { loadTrack((currentIdx + 1) % tracks.length); setPlaying(true); });
+
+// ── 起動時に最後のフォルダを自動読み込み ──
+window.addEventListener('DOMContentLoaded', async () => {
+  const result = await window.electronAPI.loadLastFolder();
+  if (result) loadFiles(result);
+});
+
+document.getElementById('centerBtn').addEventListener('click', () => {
+  if (!tracks.length) return;
+  setPlaying(!isPlaying);
+  document.getElementById('hintText').textContent = isPlaying ? '再生中' : '一時停止';
+});
+
+document.getElementById('loadBtn').addEventListener('click', async () => {
+  const result = await window.electronAPI.pickFolder();
+  if (result) loadFiles(result);
+});
+
+// ── ホイール操作 ──
+let lastAngle = null, totalDelta = 0;
+const wheelOuter = document.getElementById('wheelOuter');
+
+function getAngle(e, rect) {
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+  return Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
+}
+function changeTrack(steps) {
+  if (!tracks.length) return;
+  const next = ((currentIdx + steps) % tracks.length + tracks.length) % tracks.length;
+  playKoko(); loadTrack(next);
+  document.getElementById('hintText').textContent = `「${tracks[next].title}」を選択`;
+}
+
+wheelOuter.addEventListener('mousedown', (e) => {
+  if (document.getElementById('centerBtn').contains(e.target) || document.getElementById('eqBtn').contains(e.target)) return;
+  const rect = wheelOuter.getBoundingClientRect();
+  lastAngle = getAngle(e, rect); totalDelta = 0;
+  function onMove(ev) {
+    const a = getAngle(ev, rect); let d = a - lastAngle;
+    if (d > 180) d -= 360; if (d < -180) d += 360;
+    totalDelta += d; lastAngle = a;
+    if (Math.abs(totalDelta) >= 18) {
+      const steps = Math.trunc(totalDelta / 18); totalDelta -= steps * 18;
+      changeTrack(steps);
+    }
+  }
+  function onEnd() { lastAngle = null; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onEnd); }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+});
+
+wheelOuter.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  changeTrack(e.deltaY > 0 ? 1 : -1);
+}, { passive: false });
+
+// ── EQボタン ──
+const eqBtn = document.getElementById('eqBtn');
+const eqOverlay = document.getElementById('eqOverlay');
+
+eqBtn.addEventListener('mousedown', () => {
+  pressTimer = setTimeout(() => { pressTimer = null; eqOverlay.classList.add('open'); }, 600);
+});
+eqBtn.addEventListener('mouseup', () => {
+  if (pressTimer) {
+    clearTimeout(pressTimer); pressTimer = null;
+    eqOn = !eqOn;
+    eqBtn.className = 'eq-btn' + (eqOn ? ' eq-on' : '');
+    applyEQ();
+  }
+});
+
+document.getElementById('eqClose').addEventListener('click', () => {
+  applyEQ();
+  eqOverlay.classList.remove('open');
+});
+document.getElementById('eqReset').addEventListener('click', () => {
+  bandData.forEach(b => { b.val = 0; });
+  applyEQ();
+  renderEQ();
+});
+eqOverlay.addEventListener('click', (e) => {
+  if (e.target === eqOverlay) { applyEQ(); eqOverlay.classList.remove('open'); }
+});
+
+// ── EQフェーダー ──
+const eqBandsEl = document.getElementById('eqBands');
+const H = 160;
+const faderVisuals = [];
+
+function renderEQ() {
+  faderVisuals.forEach(v => v.update());
+}
+
+bandData.forEach((band, idx) => {
+  const col = document.createElement('div'); col.className = 'eq-band-col';
+  const dbLabel = document.createElement('div'); dbLabel.className = 'eq-db-label';
+  const faderWrap = document.createElement('div'); faderWrap.className = 'eq-fader-wrap';
+  const trackEl = document.createElement('div'); trackEl.className = 'eq-fader-track';
+  const fillEl = document.createElement('div'); fillEl.className = 'eq-fader-fill';
+  const knob = document.createElement('div'); knob.className = 'eq-knob';
+  faderWrap.appendChild(trackEl); faderWrap.appendChild(fillEl); faderWrap.appendChild(knob);
+  const freqLabel = document.createElement('div'); freqLabel.className = 'eq-freq-label';
+  freqLabel.textContent = freqList[idx] >= 1000 ? (freqList[idx] / 1000) + 'k' : freqList[idx];
+  col.appendChild(dbLabel); col.appendChild(faderWrap); col.appendChild(freqLabel);
+  eqBandsEl.appendChild(col);
+
+  function update() {
+    const pct = (band.val + 12) / 24, topPx = (1 - pct) * H, mid = H / 2;
+    knob.style.top = topPx + 'px';
+    if (band.val >= 0) { fillEl.style.top = topPx + 'px'; fillEl.style.height = (mid - topPx) + 'px'; }
+    else { fillEl.style.top = mid + 'px'; fillEl.style.height = (topPx - mid) + 'px'; }
+    dbLabel.textContent = (band.val >= 0 ? '+' : '') + band.val.toFixed(1) + 'dB';
+  }
+  faderVisuals.push({ update });
+
+  let dragging = false;
+
+  function startDrag(startY, startVal) {
+    dragging = true;
+    function onMove(ev) {
+      ev.preventDefault();
+      const y = ev.clientY ?? ev.touches?.[0]?.clientY;
+      if (y == null) return;
+      band.val = parseFloat(Math.max(-12, Math.min(12, startVal + (startY - y) / H * 24)).toFixed(1));
+      update();
+    }
+    function onUp() {
+      dragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  }
+
+  knob.addEventListener('mousedown', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    startDrag(e.clientY, band.val);
+  });
+  knob.addEventListener('touchstart', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    startDrag(e.touches[0].clientY, band.val);
+  }, { passive: false });
+
+  update();
+});
+</script>
+</body>
+</html>
